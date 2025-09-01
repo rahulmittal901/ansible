@@ -1,93 +1,228 @@
-# Ansible for DevOps Examples
+# EKS Pod Identity with EFS Setup
 
-[![Build Status](https://travis-ci.org/geerlingguy/ansible-for-devops.svg?branch=master)](https://travis-ci.org/geerlingguy/ansible-for-devops) [![GitHub CI](https://github.com/geerlingguy/ansible-for-devops/workflows/CI/badge.svg?branch=master&event=push)](https://github.com/geerlingguy/ansible-for-devops/actions)
+This repository contains scripts and Kubernetes manifests to set up Amazon EKS Pod Identity for accessing Amazon EFS (Elastic File System).
 
-This repository contains Ansible examples developed to support different sections of [Ansible for DevOps](https://www.ansiblefordevops.com/), a book on [Ansible](http://www.ansible.com/) by [Jeff Geerling](https://www.jeffgeerling.com/).
+## Overview
 
-Most of the examples are full-fledged VM examples, which use Vagrant, VirtualBox, and Ansible to boot and configure VMs on your local workstation. Not all playbooks follow all of Ansible's best practices, as they illustrate particular Ansible features in an instructive manner.
+EKS Pod Identity provides a way to associate IAM roles with Kubernetes service accounts, allowing pods to securely access AWS services without managing long-lived credentials. This setup demonstrates how to use Pod Identity to mount EFS file systems in your EKS pods.
 
-For more interesting examples of what you can do with Ansible, please see the [Ansible Vagrant Examples](https://github.com/geerlingguy/ansible-vagrant-examples) repository, and browse through some of [geerlingguy's roles on Ansible Galaxy](https://galaxy.ansible.com/geerlingguy/).
+## Prerequisites
 
-## Examples and Chapters in which they're used
+- AWS CLI installed and configured
+- kubectl installed and configured
+- An existing EKS cluster
+- An existing EFS file system (optional - can be created separately)
 
-Here is an outline of all the examples contained in this repository, by chapter:
+## Quick Start
 
-### Chapter 1
+### Option 1: Complete Automated Setup
 
-  - N/A
+Run the complete setup script:
 
-### Chapter 2
+```bash
+chmod +x setup-complete-efs-pod-identity.sh
+./setup-complete-efs-pod-identity.sh <cluster-name> [region] [efs-file-system-id]
+```
 
-  - [`first-ansible-playbook`](first-ansible-playbook/): A very basic playbook that installs `chronyd` on CentOS and ensures it is running.
+Example:
+```bash
+./setup-complete-efs-pod-identity.sh my-eks-cluster us-west-2 fs-12345678
+```
 
-### Chapter 3
+### Option 2: Step-by-Step Manual Setup
 
-  - [`orchestration`](orchestration/): A simple multiple-VM Vagrant configuration and Ansible inventory to allow testing of multi-server orchestration with `ansible` ad-hoc commands.
+#### Step 1: Install EKS Pod Identity Agent
 
-### Chapter 4
+```bash
+chmod +x setup-pod-identity-agent.sh
+./setup-pod-identity-agent.sh <cluster-name> [region]
+```
 
-  - [`drupal`](drupal/): A single-file playbook which configures the LAMP stack on a Linux host and installs Drupal.
-  - [`includes`](includes/): The same playbook as the [`drupal`](drupal/) example, but using `include`s to make the playbook more understandable.
-  - [`nodejs`](nodejs/): A single-file playbook which configures a Node.js app to run on a Linux host.
-  - [`solr`](solr/): A single-file playbook which installs Apache Solr on a Linux host.
+#### Step 2: Create IAM Role for EFS Access
 
-### Chapter 5
+```bash
+chmod +x create-iam-role-for-efs.sh
+./create-iam-role-for-efs.sh --role-name EKSPodIdentityEFSRole --region us-west-2
+```
 
-  - N/A
+#### Step 3: Install EFS CSI Driver
 
-### Chapter 6
+```bash
+chmod +x install-efs-csi-driver.sh
+./install-efs-csi-driver.sh <cluster-name> [region]
+```
 
-  - [`nodejs-role`](nodejs-role/): The same playbook as the [`nodejs`](nodejs/) example, but using a role to break out the Node.js aspects into a separate `nodejs` role.
+#### Step 4: Create Service Account
 
-### Chapter 7
+```bash
+kubectl apply -f service-account.yaml
+```
 
-  - [`dynamic-inventory`](dynamic-inventory/): Two example dynamic inventory scripts (one in PHP, one in Python) for use with Ansible.
+#### Step 5: Create Pod Identity Association
 
-### Chapter 8
+```bash
+chmod +x create-pod-identity-association.sh
+./create-pod-identity-association.sh <cluster-name> <role-arn> [namespace] [service-account-name] [region]
+```
 
-  - [`lamp-infrastructure`](lamp-infrastructure/): A multi-server LAMP-based web application infrastructure focused on high-availability and performance for a LAMP-stack app.
-  - [`elk`](elk/): A two-server example of the Elasticsearch-Logstash-Kibana stack, which uses one server to store and visualize logs centrally, and another server to send logs via Filebeat.
+#### Step 6: Update EFS File System ID
 
-### Chapter 9
+Update the following files with your EFS file system ID:
+- `efs-storage-class.yaml`
+- `efs-pv-pvc.yaml`
 
-  - [`deployments`](deployments/): A playbook that deploys a Ruby on Rails application into an environment that runs Passenger and Nginx to handle web requests.
-  - [`deployments-balancer`](deployments-balancer/): A playbook that handles zero-downtime deployments to webservers running behind an HAProxy load balancer.
-  - [`deployments-rolling`](deployments-rolling/): A playbook that demonstrates rolling deployments to multiple servers for a Node.js app.
+Replace `fs-12345678` with your actual EFS file system ID.
 
-### Chapter 10
+#### Step 7: Deploy EFS Resources
 
-  - N/A
+```bash
+kubectl apply -f efs-storage-class.yaml
+kubectl apply -f efs-pv-pvc.yaml
+```
 
-### Chapter 11
+#### Step 8: Deploy Sample Application
 
-  - [`jenkins`](jenkins/): A playbook that installs and configures Jenkins for CI/CD.
+```bash
+kubectl apply -f efs-deployment.yaml
+```
 
-### Chapter 12
+## Files Description
 
-  - [`molecule`](molecule/): A Molecule example used for testing and developing an Ansible playbook, or for testing in a Continuous Integration (CI) environment.
-  - [`ci.yml` GitHub Actions workflow](.github/workflows/ci.yml): A GitHub Actions workflow which runs the `molecule` example in a CI environment.
+### Scripts
 
-### Chapter 13
+- **`setup-complete-efs-pod-identity.sh`**: Complete automated setup script
+- **`setup-pod-identity-agent.sh`**: Installs the EKS Pod Identity Agent addon
+- **`create-iam-role-for-efs.sh`**: Creates IAM role and policy for EFS access
+- **`install-efs-csi-driver.sh`**: Installs the Amazon EFS CSI Driver
+- **`create-pod-identity-association.sh`**: Creates the pod identity association
 
-  - [`https-self-signed`](https-self-signed/): A playbook that generates self-signed certificates.
-  - [`https-letsencrypt`](https-letsencrypt/): A playbook that demonstrates automated certificate management with Let's Encrypt and Ansible.
-  - [`https-nginx-proxy`](https-nginx-proxy/): A playbook that demonstrates proxying HTTPS traffic through Nginx to HTTP backends.
+### Kubernetes Manifests
 
-### Chapter 14
+- **`service-account.yaml`**: Kubernetes service accounts for both `default` and `efs-demo` namespaces
+- **`efs-storage-class.yaml`**: StorageClass for EFS with dynamic provisioning
+- **`efs-pv-pvc.yaml`**: PersistentVolume and PersistentVolumeClaim for EFS
+- **`efs-deployment.yaml`**: Sample deployment that uses EFS with Pod Identity
 
-  - [`docker`](docker/): Very simple playbook demonstrating Ansible's ability to manage Docker container images.
-  - [`docker-hubot`](docker-hubot/): Slightly more involved example of Ansible's ability to manage and run Docker container images.
+## Verification
 
-### Chapter 15
+After deployment, verify the setup:
 
-  - [`kubernetes`](kubernetes/): A playbook that builds a three-node Kubernetes cluster.
+1. **Check pod status:**
+   ```bash
+   kubectl get pods -n efs-demo -l app=efs-demo
+   ```
 
-## License
+2. **Check PVC status:**
+   ```bash
+   kubectl get pvc -n efs-demo
+   ```
 
-MIT
+3. **Check Pod Identity associations:**
+   ```bash
+   aws eks list-pod-identity-associations --cluster-name <cluster-name>
+   ```
 
-## Buy the Book
+4. **Verify EFS mount:**
+   ```bash
+   kubectl exec -n efs-demo -it <pod-name> -- ls -la /mnt/efs
+   ```
 
-[![Ansible for DevOps Cover](https://s3.amazonaws.com/titlepages.leanpub.com/ansible-for-devops/medium)](https://www.ansiblefordevops.com/)
+5. **Check pod logs:**
+   ```bash
+   kubectl logs -n efs-demo -l app=efs-demo
+   ```
 
-Buy [Ansible for DevOps](https://www.ansiblefordevops.com/) for your e-reader or in paperback format.
+## Troubleshooting
+
+### Common Issues
+
+1. **Pod Identity Agent not installed:**
+   - Verify the agent is running: `kubectl get pods -n kube-system -l app.kubernetes.io/name=eks-pod-identity-agent`
+
+2. **EFS CSI Driver not working:**
+   - Check CSI driver pods: `kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-efs-csi-driver`
+   - Verify CSI driver is registered: `kubectl get csidriver efs.csi.aws.com`
+
+3. **Pod cannot mount EFS:**
+   - Check if the EFS file system ID is correct in the manifests
+   - Verify the security groups allow NFS traffic (port 2049)
+   - Check if the EFS file system is in the same VPC as the EKS cluster
+
+4. **Pod Identity association issues:**
+   - Verify the association exists: `aws eks describe-pod-identity-association --cluster-name <cluster-name> --association-id <association-id>`
+   - Check IAM role trust policy includes `pods.eks.amazonaws.com`
+
+### Logs and Debugging
+
+- **Pod Identity Agent logs:**
+  ```bash
+  kubectl logs -n kube-system -l app.kubernetes.io/name=eks-pod-identity-agent
+  ```
+
+- **EFS CSI Driver logs:**
+  ```bash
+  kubectl logs -n kube-system -l app=efs-csi-controller
+  kubectl logs -n kube-system -l app=efs-csi-node
+  ```
+
+- **Application pod logs:**
+  ```bash
+  kubectl logs -n efs-demo -l app=efs-demo
+  ```
+
+## Security Considerations
+
+1. **IAM Role Permissions**: The IAM role created has permissions for EFS access. Review and adjust permissions based on your security requirements.
+
+2. **Network Security**: Ensure your EFS file system's security groups allow inbound NFS traffic (port 2049) from your EKS worker nodes.
+
+3. **EFS Access Points**: Consider using EFS access points for better access control and isolation.
+
+## Customization
+
+### Using Different Namespaces
+
+To use a different namespace, update the following:
+1. Modify the namespace in `service-account.yaml`
+2. Update the namespace in `efs-deployment.yaml`
+3. Update the PVC namespace in `efs-pv-pvc.yaml`
+4. Use the correct namespace when creating the pod identity association
+
+### Using EFS Access Points
+
+To use EFS access points, modify the `volumeHandle` in `efs-pv-pvc.yaml`:
+```yaml
+volumeHandle: fs-12345678::fsap-12345678abcdef123
+```
+
+### Custom Storage Class Parameters
+
+Modify `efs-storage-class.yaml` to customize:
+- Directory permissions
+- GID ranges
+- Base path for dynamic provisioning
+
+## Clean Up
+
+To remove all resources:
+
+```bash
+kubectl delete -f efs-deployment.yaml
+kubectl delete -f efs-pv-pvc.yaml
+kubectl delete -f efs-storage-class.yaml
+kubectl delete -f service-account.yaml
+
+# Delete pod identity association
+aws eks delete-pod-identity-association --cluster-name <cluster-name> --association-id <association-id>
+
+# Delete IAM role and policy
+aws iam detach-role-policy --role-name EKSPodIdentityEFSRole --policy-arn <policy-arn>
+aws iam delete-role --role-name EKSPodIdentityEFSRole
+aws iam delete-policy --policy-arn <policy-arn>
+```
+
+## Additional Resources
+
+- [EKS Pod Identity Documentation](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
+- [Amazon EFS CSI Driver](https://github.com/kubernetes-sigs/aws-efs-csi-driver)
+- [Amazon EFS User Guide](https://docs.aws.amazon.com/efs/latest/ug/)

@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efs-demo-app
+  namespace: default
+  labels:
+    app: efs-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: efs-demo
+  template:
+    metadata:
+      labels:
+        app: efs-demo
+    spec:
+      # Use the service account associated with the IAM role
+      serviceAccountName: efs-pod-identity-sa
+      containers:
+      - name: app-container
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: efs-volume
+          mountPath: /mnt/efs
+        # Environment variables to demonstrate EFS access
+        env:
+        - name: EFS_MOUNT_PATH
+          value: "/mnt/efs"
+        # Lifecycle hook to create a test file
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Hello from Pod $(hostname) at $(date)" >> /mnt/efs/test-file.txt
+                echo "EFS mount successful!" > /mnt/efs/$(hostname).txt
+        # Readiness probe to check EFS mount
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - test -d /mnt/efs
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        # Resource limits
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: efs-volume
+        persistentVolumeClaim:
+          claimName: efs-claim
+      # Optional: Node selector for specific instance types
+      # nodeSelector:
+      #   node.kubernetes.io/instance-type: t3.medium
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efs-demo-app
+  namespace: efs-demo
+  labels:
+    app: efs-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: efs-demo
+  template:
+    metadata:
+      labels:
+        app: efs-demo
+    spec:
+      # Use the service account associated with the IAM role
+      serviceAccountName: efs-pod-identity-sa
+      containers:
+      - name: app-container
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: efs-volume
+          mountPath: /mnt/efs
+        # Environment variables to demonstrate EFS access
+        env:
+        - name: EFS_MOUNT_PATH
+          value: "/mnt/efs"
+        # Lifecycle hook to create a test file
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Hello from Pod $(hostname) at $(date)" >> /mnt/efs/test-file.txt
+                echo "EFS mount successful!" > /mnt/efs/$(hostname).txt
+        # Readiness probe to check EFS mount
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - test -d /mnt/efs
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        # Resource limits
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: efs-volume
+        persistentVolumeClaim:
+          claimName: efs-claim
+---
+# Service to expose the deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: efs-demo-service
+  namespace: default
+  labels:
+    app: efs-demo
+spec:
+  selector:
+    app: efs-demo
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP
+---
+# Service for efs-demo namespace
+apiVersion: v1
+kind: Service
+metadata:
+  name: efs-demo-service
+  namespace: efs-demo
+  labels:
+    app: efs-demo
+spec:
+  selector:
+    app: efs-demo
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP

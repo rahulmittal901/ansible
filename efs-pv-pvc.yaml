@@ -1,0 +1,55 @@
+# PersistentVolume for EFS
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: efs-pv
+  labels:
+    app: efs-demo
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: efs-sc
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: fs-12345678  # Replace with your EFS file system ID
+    volumeAttributes:
+      # Optional: specify access point ID if using access points
+      # accessPoint: fsap-12345678abcdef123
+      # Optional: specify subdirectory
+      # path: "/my-app-data"
+---
+# PersistentVolumeClaim for EFS
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-claim
+  namespace: default
+  labels:
+    app: efs-demo
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi
+---
+# PersistentVolumeClaim for EFS in efs-demo namespace
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-claim
+  namespace: efs-demo
+  labels:
+    app: efs-demo
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi
